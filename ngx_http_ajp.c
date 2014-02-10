@@ -379,6 +379,7 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     ngx_list_part_t     *part;
     ngx_table_elt_t     *header;
     struct sockaddr_in  *addr;
+    //ngx_http_variable_value_t val;
 
     log = r->connection->log;
 
@@ -567,6 +568,23 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
 
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
                 "ajp_marshal_into_msgb: attribute %V %V", &temp_str, &port_str);
+
+        if (alcf->script_url.len > 0) {
+	    temp_str.data = (u_char *)"SCRIPT_URL";
+	    temp_str.len = ngx_strlen("SCRIPT_URL");
+ 	    port_str.data = (u_char *)alcf->script_url.data;
+	    port_str.len = alcf->script_url.len;
+
+	    if (ajp_msg_append_uint8(msg, SC_A_REQ_ATTRIBUTE) ||
+                    ajp_msg_append_string(msg, &temp_str)   ||
+                    ajp_msg_append_string(msg, &port_str)) {
+                ngx_log_error(NGX_LOG_ERR, log, 0,
+                        "ajp_marshal_into_msgb: "
+                        "Error appending attribute %V=%V",
+                        &temp_str, &port_str);
+                return AJP_EOVERFLOW;
+            }
+        }
     }
 
     if (ajp_msg_append_uint8(msg, SC_A_ARE_DONE)) {

@@ -234,6 +234,13 @@ static ngx_command_t  ngx_http_ajp_commands[] = {
       offsetof(ngx_http_ajp_loc_conf_t, upstream.cache_min_uses),
       NULL },
 
+    { ngx_string("ajp_script_url"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ajp_loc_conf_t, script_url),
+      NULL },
+
     { ngx_string("ajp_cache_use_stale"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
       ngx_conf_set_bitmask_slot,
@@ -319,7 +326,14 @@ static ngx_command_t  ngx_http_ajp_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_ajp_loc_conf_t, upstream.hide_headers),
       NULL },
-
+/*
+    { ngx_string("ajp_param"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_http_upstream_param_set_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ajp_loc_conf_t, params_source),
+      NULL },
+*/
     { ngx_string("ajp_ignore_headers"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
       ngx_conf_set_bitmask_slot,
@@ -914,6 +928,9 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_value(conf->upstream.cache_lock,
                          prev->upstream.cache_lock, 0);
+    
+    ngx_conf_merge_str_value(conf->script_url,
+                         prev->script_url, "");
 
     ngx_conf_merge_msec_value(conf->upstream.cache_lock_timeout,
                               prev->upstream.cache_lock_timeout, 5000);
@@ -929,6 +946,10 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
                          prev->upstream.intercept_errors, 0);
 
     ngx_conf_merge_value(conf->keep_conn, prev->keep_conn, 0);
+
+    /*if (ngx_http_ajp_merge_params(cf, parent, child) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }*/
 
     hash.max_size = 512;
     hash.bucket_size = ngx_align(64, ngx_cacheline_size);
@@ -959,14 +980,33 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->ajp_lengths = prev->ajp_lengths;
         conf->ajp_values = prev->ajp_values;
     }
-    
+
     return NGX_CONF_OK;
 }
 
+
+// STUB. TODO: implement correct parameters merging. See ngx_http_fastcgi_merge_params() ($NGINX_SOURCE_DIR/src/http/modules/ngx_http_fastcgi_module.c:2428)
+/*
+static ngx_int_t
+ngx_http_ajp_merge_params(ngx_conf_t *cf, void *parent, void *child) {
+    
+    if (child->params_source == NULL) {
+        child->params_source = parent->params_source;
+	child->params = parent->params;
+	child->params_len parent->params_len;
+	return NGX_OK;
+    }
+
+    
+
+    return NGX_OK;
+}
+*/
 
 static ngx_int_t ngx_http_ajp_module_init_process(ngx_cycle_t *cycle)
 {
     ajp_header_init(); 
 
     return NGX_OK;
+//        8c:17:5e:7b
 }
