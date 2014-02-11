@@ -16,7 +16,9 @@ typedef struct {
 
     ngx_array_t                   *ajp_lengths;
     ngx_array_t                   *ajp_values;
-    ngx_str_t			  script_url;
+    ngx_array_t                   *param_lengths;
+    ngx_array_t                   *param_values;
+    ngx_str_t			          script_url;
 /*
     ngx_array_t			  *params;
     ngx_array_t                   *params_source;

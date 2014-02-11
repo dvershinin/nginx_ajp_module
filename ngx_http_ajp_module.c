@@ -713,6 +713,9 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     size_t                        size;
     ngx_str_t                    *h;
     ngx_hash_init_t               hash;
+    ngx_http_script_compile_t     sc;
+//    ngx_http_script_copy_code_t  *copy;
+    ngx_uint_t n;
 
     if (conf->upstream.store != 0) {
         ngx_conf_merge_value(conf->upstream.store,
@@ -979,6 +982,29 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     if (conf->ajp_lengths == NULL) {
         conf->ajp_lengths = prev->ajp_lengths;
         conf->ajp_values = prev->ajp_values;
+    }
+
+    if (conf->param_lengths == NULL) {
+        conf->param_lengths = prev->param_lengths;
+        conf->param_values = prev->param_values;
+    }
+
+    if (conf->script_url.len > 0) {
+        /*ngx_http_script_copy_code_t  *copy;
+        copy = ngx_array_push_n(conf->ajp_lengths,
+                                sizeof(ngx_http_script_copy_code_t));*/
+        ngx_memzero(&sc, sizeof(ngx_http_script_compile_t));
+        n = ngx_http_script_variables_count(&conf->script_url);
+        sc.cf = cf;
+        sc.source = &conf->script_url;
+	    sc.lengths = &conf->param_lengths;
+        sc.values = &conf->param_values;
+        sc.variables = n;
+        sc.complete_lengths = 1;
+        sc.complete_values = 1;
+        if (ngx_http_script_compile(&sc) != NGX_OK) {
+            return NGX_CONF_ERROR;
+        }
     }
 
     return NGX_CONF_OK;

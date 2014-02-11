@@ -374,7 +374,7 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     uint16_t             port;
     ngx_uint_t           i, num_headers = 0;
     ngx_str_t            uri, *remote_host, *remote_addr;
-    ngx_str_t            temp_str, *jvm_route, port_str;
+    ngx_str_t            temp_str, *jvm_route, port_str, param_str, val_str;
     ngx_log_t           *log;
     ngx_list_part_t     *part;
     ngx_table_elt_t     *header;
@@ -570,19 +570,22 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
                 "ajp_marshal_into_msgb: attribute %V %V", &temp_str, &port_str);
 
         if (alcf->script_url.len > 0) {
-	    temp_str.data = (u_char *)"SCRIPT_URL";
-	    temp_str.len = ngx_strlen("SCRIPT_URL");
- 	    port_str.data = (u_char *)alcf->script_url.data;
-	    port_str.len = alcf->script_url.len;
+	        param_str.data = (u_char *)"SCRIPT_URL";
+	        param_str.len = ngx_strlen("SCRIPT_URL");
+ 	        val_str.data = (u_char *)alcf->script_url.data;
+	        val_str.len = alcf->script_url.len;
 
-	    if (ajp_msg_append_uint8(msg, SC_A_REQ_ATTRIBUTE) ||
-                    ajp_msg_append_string(msg, &temp_str)   ||
-                    ajp_msg_append_string(msg, &port_str)) {
-                ngx_log_error(NGX_LOG_ERR, log, 0,
-                        "ajp_marshal_into_msgb: "
-                        "Error appending attribute %V=%V",
-                        &temp_str, &port_str);
-                return AJP_EOVERFLOW;
+        //u_char *result;
+            ngx_http_script_run(r, &val_str, alcf->param_lengths->elts, 0, alcf->param_values->elts);
+
+	        if (ajp_msg_append_uint8(msg, SC_A_REQ_ATTRIBUTE) ||
+                        ajp_msg_append_string(msg, &param_str)   ||
+                        ajp_msg_append_string(msg, &val_str)) {
+                        ngx_log_error(NGX_LOG_ERR, log, 0,
+                            "ajp_marshal_into_msgb: "
+                            "Error appending attribute %V=%V",
+                        &param_str, &val_str);
+                    return AJP_EOVERFLOW;
             }
         }
     }
