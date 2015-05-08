@@ -7,6 +7,11 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#if (nginx_version >= 1007009)
+typedef struct {
+    ngx_array_t                caches;  /* ngx_http_file_cache_t * */
+} ngx_http_ajp_main_conf_t;
+#endif
 
 typedef struct {
     ngx_http_upstream_conf_t   upstream;

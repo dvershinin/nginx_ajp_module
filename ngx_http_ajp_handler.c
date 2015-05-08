@@ -44,6 +44,11 @@ ngx_http_ajp_handler(ngx_http_request_t *r)
     ngx_http_upstream_t      *u;
     ngx_http_ajp_ctx_t       *a;
     ngx_http_ajp_loc_conf_t  *alcf;
+#if (NGX_HTTP_CACHE)
+#if (nginx_version >= 1007009)
+    ngx_http_ajp_main_conf_t *amcf;
+#endif
+#endif
 
     if (r->subrequest_in_memory) {
         ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
@@ -84,6 +89,11 @@ ngx_http_ajp_handler(ngx_http_request_t *r)
     u->conf = &alcf->upstream;
 
 #if (NGX_HTTP_CACHE)
+#if (nginx_version >= 1007009)
+    amcf = ngx_http_get_module_main_conf(r, ngx_http_ajp_module);
+
+    u->caches = &amcf->caches;
+#endif
     u->create_key = ngx_http_ajp_create_key;
 #endif
     u->create_request = ngx_http_ajp_create_request;
