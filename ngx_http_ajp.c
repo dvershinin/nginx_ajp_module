@@ -667,8 +667,7 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
  	        val_str.data = (u_char *)alcf->script_url.data;
 	        val_str.len = alcf->script_url.len;
 
-        //u_char *result;
-            ngx_http_script_run(r, &val_str, alcf->param_lengths->elts, 0, alcf->param_values->elts);
+                ngx_http_script_run(r, &val_str, alcf->param_lengths->elts, 0, alcf->param_values->elts);
 
 	        if (ajp_msg_append_uint8(msg, SC_A_REQ_ATTRIBUTE) ||
                         ajp_msg_append_string(msg, &param_str)   ||
