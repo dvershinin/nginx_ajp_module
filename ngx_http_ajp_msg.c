@@ -1,20 +1,19 @@
-
 #include "ngx_http_ajp.h"
 
 extern volatile ngx_cycle_t  *ngx_cycle;
 
 
-static ngx_int_t 
+static ngx_int_t
 ajp_msg_check_header(ajp_msg_t *msg)
 {
     u_char *head = msg->buf->pos;
 
     if (!((head[0] == 0x41 && head[1] == 0x42) ||
-                (head[0] == 0x12 && head[1] == 0x34))) {
-
+          (head[0] == 0x12 && head[1] == 0x34)))
+    {
         ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0,
-                "ajp_check_msg_header() got bad signature %02Xd%02Xd",
-                head[0], head[1]);
+                      "ajp_check_msg_header() got bad signature %02Xd%02Xd",
+                      head[0], head[1]);
 
         return NGX_ERROR;
     }
@@ -23,12 +22,12 @@ ajp_msg_check_header(ajp_msg_t *msg)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_is_zero_length(u_char *head)
 {
 
     if (head[0] == 0x41 && head[1] == 0x42 &&
-            head[3] == 0x00 && head[4] == 0x00)
+        head[3] == 0x00 && head[4] == 0x00)
     {
         return 1;
     }
@@ -37,7 +36,7 @@ ajp_msg_is_zero_length(u_char *head)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_parse_begin(ajp_msg_t *msg)
 {
     ngx_buf_t *buf = msg->buf;
@@ -63,8 +62,8 @@ ajp_msg_reset(ajp_msg_t *msg)
 
     if (buf->end > buf->start + AJP_HEADER_LEN) {
         buf->pos = buf->last = buf->start + AJP_HEADER_LEN;
-    }
-    else {
+
+    } else {
         return NGX_ERROR;
     }
 
@@ -81,7 +80,7 @@ ajp_msg_reuse(ajp_msg_t *msg)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_end(ajp_msg_t *msg)
 {
     size_t     len;
@@ -93,8 +92,7 @@ ajp_msg_end(ajp_msg_t *msg)
     if (msg->server_side) {
         buf->start[0] = 0x41;
         buf->start[1] = 0x42;
-    }
-    else {
+    } else {
         buf->start[0] = 0x12;
         buf->start[1] = 0x34;
     }
@@ -108,12 +106,12 @@ ajp_msg_end(ajp_msg_t *msg)
 }
 
 
-static inline int 
+ngx_int_t
 ajp_log_overflow(ajp_msg_t *msg, const char *context)
 {
     ngx_log_error(NGX_LOG_WARN, ngx_cycle->log, 0,
-            "%s(): BufferOverflowException pos:%p, last:%p, end:%p",
-            context, msg->buf->pos, msg->buf->last, msg->buf->end);
+                  "%s(): BufferOverflowException pos:%p, last:%p, end:%p",
+                  context, msg->buf->pos, msg->buf->last, msg->buf->end);
 
     return AJP_EOVERFLOW;
 }
@@ -139,7 +137,7 @@ ajp_msg_append_uint32(ajp_msg_t *msg, uint32_t value)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_append_uint16(ajp_msg_t *msg, uint16_t value)
 {
     ngx_buf_t *buf;
@@ -157,7 +155,7 @@ ajp_msg_append_uint16(ajp_msg_t *msg, uint16_t value)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_append_uint8(ajp_msg_t *msg, u_char value)
 {
     ngx_buf_t *buf;
@@ -174,7 +172,7 @@ ajp_msg_append_uint8(ajp_msg_t *msg, u_char value)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_append_string(ajp_msg_t *msg, ngx_str_t *value)
 {
     ngx_buf_t *buf;
@@ -191,7 +189,7 @@ ajp_msg_append_string(ajp_msg_t *msg, ngx_str_t *value)
 
     ajp_msg_append_uint16(msg, (uint16_t) value->len);
 
-    ngx_memcpy(buf->last, value->data, value->len); 
+    ngx_memcpy(buf->last, value->data, value->len);
     buf->last  += value->len;
 
     *buf->last++ = '\0';
@@ -200,7 +198,7 @@ ajp_msg_append_string(ajp_msg_t *msg, ngx_str_t *value)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_get_uint32(ajp_msg_t *msg, uint32_t *rvalue)
 {
     uint32_t   value;
@@ -222,7 +220,7 @@ ajp_msg_get_uint32(ajp_msg_t *msg, uint32_t *rvalue)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_get_uint16(ajp_msg_t *msg, uint16_t *rvalue)
 {
     uint16_t value;
@@ -243,7 +241,7 @@ ajp_msg_get_uint16(ajp_msg_t *msg, uint16_t *rvalue)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_peek_uint16(ajp_msg_t *msg, uint16_t *rvalue)
 {
     uint16_t value;
@@ -264,7 +262,7 @@ ajp_msg_peek_uint16(ajp_msg_t *msg, uint16_t *rvalue)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_peek_uint8(ajp_msg_t *msg, u_char *rvalue)
 {
     if ((msg->buf->pos + 1) > msg->buf->last) {
@@ -277,10 +275,9 @@ ajp_msg_peek_uint8(ajp_msg_t *msg, u_char *rvalue)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_get_uint8(ajp_msg_t *msg, u_char *rvalue)
 {
-
     if ((msg->buf->pos + 1) > msg->buf->last) {
         return ajp_log_overflow(msg, "ajp_msg_get_uint8");
     }
@@ -291,7 +288,7 @@ ajp_msg_get_uint8(ajp_msg_t *msg, u_char *rvalue)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_get_string(ajp_msg_t *msg, ngx_str_t *value)
 {
     u_char    *start;
@@ -309,7 +306,7 @@ ajp_msg_get_string(ajp_msg_t *msg, ngx_str_t *value)
     }
 
     buf->pos += (size_t)size;
-    buf->pos++;      /* a String in AJP is NULL terminated */
+    buf->pos++;   /* a String in AJP is NULL terminated */
 
     value->data = start;
     value->len = size;
@@ -318,7 +315,7 @@ ajp_msg_get_string(ajp_msg_t *msg, ngx_str_t *value)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_create(ngx_pool_t *pool, size_t size, ajp_msg_t **rmsg)
 {
     ajp_msg_t *msg;
@@ -342,7 +339,7 @@ ajp_msg_create(ngx_pool_t *pool, size_t size, ajp_msg_t **rmsg)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_create_buffer(ngx_pool_t *pool, size_t size, ajp_msg_t *msg)
 {
     msg->server_side = 0;
@@ -356,7 +353,7 @@ ajp_msg_create_buffer(ngx_pool_t *pool, size_t size, ajp_msg_t *msg)
 }
 
 
-ngx_int_t 
+ngx_int_t
 ajp_msg_create_without_buffer(ngx_pool_t *pool, ajp_msg_t **rmsg)
 {
     ajp_msg_t *msg;
@@ -374,7 +371,7 @@ ajp_msg_create_without_buffer(ngx_pool_t *pool, ajp_msg_t **rmsg)
 }
 
 
-ngx_int_t  
+ngx_int_t
 ajp_alloc_data_msg(ngx_pool_t *pool, ajp_msg_t *msg)
 {
     ngx_int_t rc;
@@ -389,7 +386,7 @@ ajp_alloc_data_msg(ngx_pool_t *pool, ajp_msg_t *msg)
 }
 
 
-ngx_int_t  
+ngx_int_t
 ajp_data_msg_end(ajp_msg_t *msg, size_t len)
 {
     ngx_buf_t *buf;
@@ -403,7 +400,7 @@ ajp_data_msg_end(ajp_msg_t *msg, size_t len)
     buf->start[AJP_HEADER_SZ - 2] = (u_char)((len >> 8) & 0xFF);
     buf->start[AJP_HEADER_SZ - 1] = (u_char)(len & 0xFF);
 
-    /*len include AJP_HEADER_SIZE_LEN*/
+    /* len include AJP_HEADER_SIZE_LEN */
     len += AJP_HEADER_SZ_LEN;
     buf->start[AJP_HEADER_LEN - 2] = (u_char)((len >> 8) & 0xFF);
     buf->start[AJP_HEADER_LEN - 1] = (u_char)(len & 0xFF);
@@ -412,7 +409,7 @@ ajp_data_msg_end(ajp_msg_t *msg, size_t len)
 }
 
 
-u_char * 
+u_char *
 ajp_msg_dump(ngx_pool_t *pool, ajp_msg_t *msg, char *err)
 {
     size_t     i, len, dump;
@@ -434,7 +431,7 @@ ajp_msg_dump(ngx_pool_t *pool, ajp_msg_t *msg, char *err)
 
     last = rv + len;
 
-    p = ngx_snprintf(p, len, 
+    p = ngx_snprintf(p, len,
             "ajp_msg_dump(): \"%s\", start:%p, pos:%p, last:%p \n"
             "dump packet: \n",
             err, buf->start, buf->pos, buf->last);
@@ -454,7 +451,7 @@ ajp_msg_dump(ngx_pool_t *pool, ajp_msg_t *msg, char *err)
 
 
 /* TODO: health check */
-ngx_int_t 
+ngx_int_t
 ajp_msg_serialize_ping(ajp_msg_t *msg)
 {
     ngx_int_t rc;
@@ -470,7 +467,7 @@ ajp_msg_serialize_ping(ajp_msg_t *msg)
 
 
 /* TODO: health check */
-ngx_int_t 
+ngx_int_t
 ajp_msg_serialize_cping(ajp_msg_t *msg)
 {
     ngx_int_t rc;

@@ -38,14 +38,14 @@ static ngx_conf_post_t  ngx_http_ajp_lowat_post = { ngx_http_ajp_lowat_check };
 
 
 static ngx_conf_bitmask_t  ngx_http_ajp_next_upstream_masks[] = {
-    { ngx_string("error"), NGX_HTTP_UPSTREAM_FT_ERROR },
-    { ngx_string("timeout"), NGX_HTTP_UPSTREAM_FT_TIMEOUT },
+    { ngx_string("error"),          NGX_HTTP_UPSTREAM_FT_ERROR },
+    { ngx_string("timeout"),        NGX_HTTP_UPSTREAM_FT_TIMEOUT },
     { ngx_string("invalid_header"), NGX_HTTP_UPSTREAM_FT_INVALID_HEADER },
-    { ngx_string("http_500"), NGX_HTTP_UPSTREAM_FT_HTTP_500 },
-    { ngx_string("http_503"), NGX_HTTP_UPSTREAM_FT_HTTP_503 },
-    { ngx_string("http_404"), NGX_HTTP_UPSTREAM_FT_HTTP_404 },
-    { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
-    { ngx_string("off"), NGX_HTTP_UPSTREAM_FT_OFF },
+    { ngx_string("http_500"),       NGX_HTTP_UPSTREAM_FT_HTTP_500 },
+    { ngx_string("http_503"),       NGX_HTTP_UPSTREAM_FT_HTTP_503 },
+    { ngx_string("http_404"),       NGX_HTTP_UPSTREAM_FT_HTTP_404 },
+    { ngx_string("updating"),       NGX_HTTP_UPSTREAM_FT_UPDATING },
+    { ngx_string("off"),            NGX_HTTP_UPSTREAM_FT_OFF },
     { ngx_null_string, 0 }
 };
 
@@ -463,8 +463,8 @@ ngx_http_ajp_store(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_ajp_loc_conf_t    *alcf = conf;
     ngx_http_script_compile_t   sc;
 
-    if (alcf->upstream.store != NGX_CONF_UNSET
-        || alcf->upstream.store_lengths)
+    if ((alcf->upstream.store != NGX_CONF_UNSET) ||
+        alcf->upstream.store_lengths)
     {
         return "is duplicate";
     }
@@ -478,8 +478,12 @@ ngx_http_ajp_store(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #if (NGX_HTTP_CACHE)
 
+#if (nginx_version >= 1007009)
+    if (alcf->upstream.cache > 0)
+#else
     if (alcf->upstream.cache != NGX_CONF_UNSET_PTR
         && alcf->upstream.cache != NULL)
+#endif
     {
         return "is incompatible with \"ajp_cache\"";
     }
@@ -534,7 +538,6 @@ ngx_http_ajp_lowat_check(ngx_conf_t *cf, void *post, void *data)
                        "\"ajp_send_lowat\" is not supported, ignored");
 
     *np = 0;
-
 #endif
 
     return NGX_CONF_OK;
@@ -549,15 +552,27 @@ ngx_http_ajp_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_ajp_loc_conf_t *alcf = conf;
 
     ngx_str_t  *value;
+#if (nginx_version >= 1007009)
+    ngx_http_complex_value_t           cv;
+    ngx_http_compile_complex_value_t   ccv;
+#endif
 
     value = cf->args->elts;
 
+#if (nginx_version >= 1007009)
+    if (alcf->upstream.cache != NGX_CONF_UNSET) {
+#else
     if (alcf->upstream.cache != NGX_CONF_UNSET_PTR) {
+#endif
         return "is duplicate";
     }
 
     if (ngx_strcmp(value[1].data, "off") == 0) {
+#if (nginx_version >= 1007009)
+        alcf->upstream.cache = 0;
+#else
         alcf->upstream.cache = NULL;
+#endif
         return NGX_CONF_OK;
     }
 
@@ -565,11 +580,44 @@ ngx_http_ajp_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return "is incompatible with \"ajp_store\"";
     }
 
+#if (nginx_version >= 1007009)
+    alcf->upstream.cache = 1;
+
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[1];
+    ccv.complex_value = &cv;
+
+    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    if (cv.lengths != NULL) {
+
+        alcf->upstream.cache_value = ngx_palloc(cf->pool,
+                                             sizeof(ngx_http_complex_value_t));
+        if (alcf->upstream.cache_value == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        *alcf->upstream.cache_value = cv;
+
+        return NGX_CONF_OK;
+    }
+
+    alcf->upstream.cache_zone = ngx_shared_memory_add(cf, &value[1], 0,
+                                                      &ngx_http_ajp_module);
+    if (alcf->upstream.cache_zone == NULL) {
+        return NGX_CONF_ERROR;
+    }
+#else
     alcf->upstream.cache = ngx_shared_memory_add(cf, &value[1], 0,
                                                  &ngx_http_ajp_module);
     if (alcf->upstream.cache == NULL) {
         return NGX_CONF_ERROR;
     }
+#endif
 
     return NGX_CONF_OK;
 }
@@ -681,7 +729,11 @@ ngx_http_ajp_create_loc_conf(ngx_conf_t *cf)
     conf->upstream.pass_request_body = NGX_CONF_UNSET;
 
 #if (NGX_HTTP_CACHE)
+#if (nginx_version >= 1007009)
+    conf->upstream.cache = NGX_CONF_UNSET;
+#else
     conf->upstream.cache = NGX_CONF_UNSET_PTR;
+#endif
     conf->upstream.cache_min_uses = NGX_CONF_UNSET_UINT;
     conf->upstream.cache_valid = NGX_CONF_UNSET_PTR;
     conf->upstream.cache_lock = NGX_CONF_UNSET;
@@ -710,16 +762,33 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_ajp_loc_conf_t *prev = parent;
     ngx_http_ajp_loc_conf_t *conf = child;
 
+//<<<<<<< HEAD
     size_t                        size;
     ngx_str_t                    *h;
     ngx_hash_init_t               hash;
     ngx_http_script_compile_t     sc;
-//    ngx_http_script_copy_code_t  *copy;
     ngx_uint_t n;
+//=======
+//    size_t            size;
+//    ngx_str_t        *h;
+//    ngx_hash_init_t   hash;
+
+#if (NGX_HTTP_CACHE) && (nginx_version >= 1007009)
+
+    if (conf->upstream.store > 0) {
+        conf->upstream.cache = 0;
+    }
+
+    if (conf->upstream.cache > 0) {
+        conf->upstream.store = 0;
+    }
+
+#endif
+//>>>>>>> upstream/master
 
     if (conf->upstream.store != 0) {
         ngx_conf_merge_value(conf->upstream.store,
-                              prev->upstream.store, 0);
+                             prev->upstream.store, 0);
 
         if (conf->upstream.store_lengths == NULL) {
             conf->upstream.store_lengths = prev->upstream.store_lengths;
@@ -728,21 +797,21 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
     ngx_conf_merge_size_value(conf->ajp_header_packet_buffer_size_conf,
-            prev->ajp_header_packet_buffer_size_conf,
-            (size_t) AJP_MSG_BUFFER_SZ);
+                              prev->ajp_header_packet_buffer_size_conf,
+                              (size_t) AJP_MSG_BUFFER_SZ);
 
     ngx_conf_merge_size_value(conf->max_ajp_data_packet_size_conf,
-            prev->max_ajp_data_packet_size_conf,
-            (size_t) AJP_MSG_BUFFER_SZ);
+                              prev->max_ajp_data_packet_size_conf,
+                              (size_t) AJP_MSG_BUFFER_SZ);
 
     ngx_conf_merge_uint_value(conf->upstream.store_access,
                               prev->upstream.store_access, 0600);
 
     ngx_conf_merge_value(conf->upstream.buffering,
-                              prev->upstream.buffering, 1);
+                         prev->upstream.buffering, 1);
 
     ngx_conf_merge_value(conf->upstream.ignore_client_abort,
-                              prev->upstream.ignore_client_abort, 0);
+                         prev->upstream.ignore_client_abort, 0);
 
     ngx_conf_merge_msec_value(conf->upstream.connect_timeout,
                               prev->upstream.connect_timeout, 60000);
@@ -775,8 +844,7 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     if(conf->max_ajp_data_packet_size_conf < AJP_MSG_BUFFER_SZ) {
         conf->max_ajp_data_packet_size_conf = AJP_MSG_BUFFER_SZ;
-    }
-    else if(conf->max_ajp_data_packet_size_conf > AJP_MAX_BUFFER_SZ ) {
+    } else if(conf->max_ajp_data_packet_size_conf > AJP_MAX_BUFFER_SZ ) {
         conf->max_ajp_data_packet_size_conf = AJP_MAX_BUFFER_SZ;
     }
 
@@ -883,6 +951,20 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
 #if (NGX_HTTP_CACHE)
 
+#if (nginx_version >= 1007009)
+    if (conf->upstream.cache == NGX_CONF_UNSET) {
+        ngx_conf_merge_value(conf->upstream.cache,
+                              prev->upstream.cache, 0);
+
+        conf->upstream.cache_zone = prev->upstream.cache_zone;
+        conf->upstream.cache_value = prev->upstream.cache_value;
+    }
+
+    if (conf->upstream.cache_zone && conf->upstream.cache_zone->data == NULL) {
+        ngx_shm_zone_t  *shm_zone;
+
+        shm_zone = conf->upstream.cache_zone;
+#else
     ngx_conf_merge_ptr_value(conf->upstream.cache,
                              prev->upstream.cache, NULL);
 
@@ -890,6 +972,7 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         ngx_shm_zone_t  *shm_zone;
 
         shm_zone = conf->upstream.cache;
+#endif
 
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                            "\"ajp_cache\" zone \"%V\" is unknown, "
@@ -927,6 +1010,11 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     if (conf->cache_key.value.data == NULL) {
         conf->cache_key = prev->cache_key;
+    }
+
+    if (conf->upstream.cache && conf->cache_key.value.data == NULL) {
+        ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
+                           "no \"fastcgi_cache_key\" for \"fastcgi_cache\"");
     }
 
     ngx_conf_merge_value(conf->upstream.cache_lock,
@@ -984,6 +1072,7 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->ajp_values = prev->ajp_values;
     }
 
+//<<<<<<< HEAD
     if (conf->param_lengths == NULL) {
         conf->param_lengths = prev->param_lengths;
         conf->param_values = prev->param_values;
@@ -1007,6 +1096,8 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
+//=======
+//>>>>>>> upstream/master
     return NGX_CONF_OK;
 }
 
@@ -1031,7 +1122,7 @@ ngx_http_ajp_merge_params(ngx_conf_t *cf, void *parent, void *child) {
 
 static ngx_int_t ngx_http_ajp_module_init_process(ngx_cycle_t *cycle)
 {
-    ajp_header_init(); 
+    ajp_header_init();
 
     return NGX_OK;
 //        8c:17:5e:7b
