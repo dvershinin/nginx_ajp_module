@@ -27,7 +27,9 @@ static char *ngx_http_ajp_upstream_max_fails_unsupported(ngx_conf_t *cf,
 static char *ngx_http_ajp_upstream_fail_timeout_unsupported(ngx_conf_t *cf,
     ngx_command_t *cmd, void *conf);
 
-
+#if (nginx_version >= 1007009)
+static void *ngx_http_ajp_create_main_conf(ngx_conf_t *cf);
+#endif
 static void *ngx_http_ajp_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
@@ -216,8 +218,13 @@ static ngx_command_t  ngx_http_ajp_commands[] = {
     { ngx_string("ajp_cache_path"),
       NGX_HTTP_MAIN_CONF|NGX_CONF_2MORE,
       ngx_http_file_cache_set_slot,
+#if (nginx_version >= 1007009)
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      offsetof(ngx_http_ajp_main_conf_t, caches),
+#else
       0,
       0,
+#endif
       &ngx_http_ajp_module },
 
     { ngx_string("ajp_cache_valid"),
@@ -342,7 +349,11 @@ static ngx_http_module_t  ngx_http_ajp_module_ctx = {
     NULL,                                  /* preconfiguration */
     NULL,                                  /* postconfiguration */
 
+#if (nginx_version >= 1007009)
+    ngx_http_ajp_create_main_conf,         /* create main configuration */
+#else
     NULL,                                  /* create main configuration */
+#endif
     NULL,                                  /* init main configuration */
 
     NULL,                                  /* create server configuration */
@@ -663,6 +674,31 @@ ngx_http_ajp_upstream_fail_timeout_unsupported(ngx_conf_t *cf,
 
     return NGX_CONF_ERROR;
 }
+
+
+#if (nginx_version >= 1007009)
+static void *
+ngx_http_ajp_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_http_ajp_main_conf_t  *conf;
+
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_ajp_main_conf_t));
+    if (conf == NULL) {
+        return NULL;
+    }
+
+#if (NGX_HTTP_CACHE)
+    if (ngx_array_init(&conf->caches, cf->pool, 4,
+                       sizeof(ngx_http_file_cache_t *))
+        != NGX_OK)
+    {  
+        return NULL;
+    }
+#endif
+
+    return conf;
+}
+#endif
 
 
 static void *
