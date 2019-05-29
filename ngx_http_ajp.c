@@ -405,12 +405,13 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     u_char               is_ssl = 0;
     uint16_t             port;
     ngx_str_t            uri, *remote_host, *remote_addr;
-    ngx_str_t            temp_str, *jvm_route, port_str;
+    ngx_str_t            temp_str, *jvm_route, port_str, param_str, val_str;
     ngx_log_t           *log;
     ngx_uint_t           i, num_headers = 0;
     ngx_list_part_t     *part;
     ngx_table_elt_t     *header;
     struct sockaddr_in  *addr;
+    //ngx_http_variable_value_t val;
 
     log = r->connection->log;
 
@@ -657,8 +658,31 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
         }
 
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
+//<<<<<<< HEAD
+                "ajp_marshal_into_msgb: attribute %V %V", &temp_str, &port_str);
+
+        if (alcf->script_url.len > 0) {
+	        param_str.data = (u_char *)"SCRIPT_URL";
+	        param_str.len = ngx_strlen("SCRIPT_URL");
+ 	        val_str.data = (u_char *)alcf->script_url.data;
+	        val_str.len = alcf->script_url.len;
+
+                ngx_http_script_run(r, &val_str, alcf->param_lengths->elts, 0, alcf->param_values->elts);
+
+	        if (ajp_msg_append_uint8(msg, SC_A_REQ_ATTRIBUTE) ||
+                        ajp_msg_append_string(msg, &param_str)   ||
+                        ajp_msg_append_string(msg, &val_str)) {
+                        ngx_log_error(NGX_LOG_ERR, log, 0,
+                            "ajp_marshal_into_msgb: "
+                            "Error appending attribute %V=%V",
+                        &param_str, &val_str);
+                    return AJP_EOVERFLOW;
+            }
+        }
+/*=======
                        "ajp_marshal_into_msgb: attribute %V %V",
                        &temp_str, &port_str);
+>>>>>>> upstream/master*/
     }
 
     if (ajp_msg_append_uint8(msg, SC_A_ARE_DONE)) {
