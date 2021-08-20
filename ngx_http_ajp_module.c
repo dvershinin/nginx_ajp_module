@@ -11,8 +11,6 @@ static char *ngx_http_ajp_pass(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static char *ngx_http_ajp_store(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
-static char *ngx_http_ajp_secret(ngx_conf_t *cf, ngx_command_t *cmd,
-    void *conf);
 
 #if (NGX_HTTP_CACHE)
 static char *ngx_http_ajp_cache(ngx_conf_t *cf, ngx_command_t *cmd,
@@ -98,9 +96,9 @@ static ngx_command_t  ngx_http_ajp_commands[] = {
 
     { ngx_string("ajp_secret"),
       NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE1,
-      ngx_http_ajp_secret,
+      ngx_conf_set_str_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
-      0,
+      offsetof(ngx_http_ajp_loc_conf_t, secret),
       NULL },
 
     { ngx_string("ajp_header_packet_buffer_size"),
@@ -449,10 +447,9 @@ ngx_http_ajp_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         if (ngx_http_script_compile(&sc) != NGX_OK) {
             return NGX_CONF_ERROR;
         }
-
-	if( cf->args->nelts>2 ) {
-            alcf->secret = &value[2];
-	}
+        if( cf->args->nelts>2 ) {
+            alcf->secret = value[2];
+        }
 
         return NGX_CONF_OK;
     }
@@ -475,25 +472,12 @@ ngx_http_ajp_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (alcf->upstream.upstream == NULL) {
         return NGX_CONF_ERROR;
     }
-
     if( cf->args->nelts>2 ) {
-         alcf->secret = &value[2];
+         alcf->secret = value[2];
     }
+
     return NGX_CONF_OK;
 }
-
-static char *
-ngx_http_ajp_secret(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    ngx_http_ajp_loc_conf_t    *alcf = conf;
-    ngx_str_t                  *value, *secret;
-
-    value = cf->args->elts;
-    secret = &value[1];
-    alcf->secret = secret;
-    return NGX_CONF_OK;
-}
-
 
 static char *
 ngx_http_ajp_store(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
@@ -816,8 +800,6 @@ ngx_http_ajp_create_loc_conf(ngx_conf_t *cf)
 
     ngx_str_set(&conf->upstream.module, "ajp");
 
-    conf->secret = NULL;
-
     return conf;
 }
 
@@ -838,6 +820,10 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 //    size_t            size;
 //    ngx_str_t        *h;
 //    ngx_hash_init_t   hash;
+
+    if (conf->secret.data == NULL){
+      conf->secret = prev->secret;
+    }
 
 #if (NGX_HTTP_CACHE) && (nginx_version >= 1007009)
 
