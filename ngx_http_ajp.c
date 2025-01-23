@@ -61,12 +61,20 @@ static response_known_headers_t response_known_headers[] = {
 };
 
 
+#define SESSION_ROUTE_HEADER_LOWCASE "session-route"
+
+static ngx_uint_t session_route_header_hash;
+
+
 /* This will be called in the ajp_module's init_process function. */
 void
 ajp_header_init(void)
 {
     request_known_headers_calc_hash();
     response_known_headers_calc_hash();
+
+    session_route_header_hash = ngx_hash_key((u_char *)SESSION_ROUTE_HEADER_LOWCASE,
+                                                sizeof(SESSION_ROUTE_HEADER_LOWCASE) - 1);
 }
 
 
@@ -116,13 +124,27 @@ response_known_headers_calc_hash(void)
 
 
 static ngx_uint_t
-sc_for_req_get_headers_num(ngx_list_part_t *part)
+sc_for_req_get_headers_num(ngx_ajp_proxy_headers_t *headers, ngx_list_part_t *part)
 {
-    ngx_uint_t num = 0;
+    ngx_table_elt_t *header;
+    ngx_uint_t       i, num = 0;
 
-    while (part) {
-        num += part->nelts;
-        part = part->next;
+    if (part) {
+        header = part->elts;
+        for (i = 0; /* void */; i++) {
+            if (i >= part->nelts) {
+                if (part->next == NULL) {
+                    break;
+                }
+                part = part->next;
+                header = part->elts;
+                i = 0;
+            }
+            if (!ngx_hash_find(&headers->hash, header[i].hash,
+                               header[i].lowcase_key, header[i].key.len)) {
+                num++;
+            }
+        }
     }
 
     return num;
@@ -194,13 +216,10 @@ sc_for_req_header(ngx_table_elt_t *header)
 
 
 static ngx_str_t *
-sc_for_req_get_header_vaule_by_hash(ngx_list_part_t *part,
-    u_char *lowcase_key, size_t len)
+sc_for_req_get_header_value_by_hash(ngx_list_part_t *part, ngx_uint_t hash)
 {
-    ngx_uint_t       i, hash;
+    ngx_uint_t       i;
     ngx_table_elt_t *header;
-
-    hash = ngx_hash_key(lowcase_key, len);
 
     header = part->elts;
     for (i = 0; /* void */; i++) {
@@ -216,7 +235,7 @@ sc_for_req_get_header_vaule_by_hash(ngx_list_part_t *part,
         }
 
         if (header[i].hash == hash) {
-            return &header->value;
+            return &header[i].value;
         }
     }
 
@@ -269,18 +288,15 @@ sc_for_req_method_by_id(ngx_http_request_t *r)
 
 
 static void
-sc_for_req_auth_type(ngx_http_request_t *r, ngx_str_t *auth_type)
+sc_for_auth_type(ngx_str_t *auth, ngx_str_t *auth_type)
 {
     size_t     i;
-    ngx_str_t *auth;
 
     auth_type->len = 0;
 
-    if (r->headers_in.authorization == NULL) {
+    if (auth == NULL) {
         return;
     }
-
-    auth = &r->headers_in.authorization->value;
 
     for(i = 0; i < auth->len; i++) {
         if (auth->data[i] == ' ') {
@@ -290,8 +306,18 @@ sc_for_req_auth_type(ngx_http_request_t *r, ngx_str_t *auth_type)
 
     if (i > 0) {
         auth_type->data = auth->data;
-        auth_type->len = i - 1;
+        auth_type->len = i;
     }
+}
+
+
+static void
+sc_for_req_auth_type(ngx_http_request_t *r, ngx_str_t *auth_type)
+{
+    ngx_str_t *auth = r->headers_in.authorization == NULL ? NULL
+                   : &r->headers_in.authorization->value;
+
+    sc_for_auth_type(auth, auth_type);
 }
 
 
@@ -412,6 +438,17 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     ngx_table_elt_t     *header;
     struct sockaddr_in  *addr;
     //ngx_http_variable_value_t val;
+    ngx_http_script_engine_t     e, le;
+    ngx_http_script_code_pt      code;
+    ngx_http_script_len_code_pt  lcode;
+    ngx_ajp_proxy_headers_t     *headers;
+    ngx_table_elt_t              header_tmp;
+    ngx_str_t                    authorization_str = ngx_null_string,
+                                 jvm_route_str = ngx_null_string;
+    u_char                      *tmp, *key_tmp, *val_tmp, *lowcase_key_tmp,
+                                *authorization_val_tmp, *jvm_route_val_tmp;
+    size_t                       key_len, val_len,
+                                 max_key_len = 0, max_val_len = 0;
 
     log = r->connection->log;
 
@@ -425,11 +462,60 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     is_ssl = (u_char) r->http_connection->ssl;
 #endif
 
+#if (NGX_HTTP_CACHE)
+    headers = r->upstream->cacheable ? &alcf->headers_cache : &alcf->headers;
+#else
+    headers = &alcf->headers;
+#endif
+
     part = &r->headers_in.headers.part;
 
-    if (alcf->upstream.pass_request_headers) {
-        num_headers = sc_for_req_get_headers_num(part);
+    num_headers = sc_for_req_get_headers_num(headers,
+                                             alcf->upstream.pass_request_headers ? part : NULL);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, log, 0,
+                      "ajp_marshal_into_msgb: request headers number = %d", num_headers);
+
+    // Calculate maximal key and value length for temporary buffer allocation
+    ngx_http_script_flush_no_cacheable_variables(r, headers->flushes);
+
+    ngx_memzero(&le, sizeof(ngx_http_script_engine_t));
+
+    le.ip = headers->lengths->elts;
+    le.request = r;
+    le.flushed = 1;
+
+    while (*(uintptr_t *) le.ip) {
+
+        lcode = *(ngx_http_script_len_code_pt *) le.ip;
+        key_len = lcode(&le);
+
+        for (val_len = 0; *(uintptr_t *) le.ip; val_len += lcode(&le)) {
+            lcode = *(ngx_http_script_len_code_pt *) le.ip;
+        }
+        le.ip += sizeof(uintptr_t);
+
+        max_key_len = ngx_max(max_key_len, key_len);
+        max_val_len = ngx_max(max_val_len, val_len);
+
+        if (val_len > 0) {
+            num_headers++;
+        }
     }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, log, 0,
+                      "ajp_marshal_into_msgb: total headers number = %d", num_headers);
+
+    // Allocate keys and values temporary storage
+    tmp = ngx_palloc(r->pool, max_key_len * 2 + max_val_len * 3);
+    if (tmp == NULL) {
+        return NGX_ERROR;
+    }
+
+    key_tmp = tmp;
+    lowcase_key_tmp = key_tmp + max_key_len;
+    val_tmp = lowcase_key_tmp + max_key_len;
+    authorization_val_tmp = val_tmp + max_val_len;
+    jvm_route_val_tmp = authorization_val_tmp + max_val_len;
 
     remote_host = remote_addr = &r->connection->addr_text;
 
@@ -464,8 +550,122 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
         return AJP_EOVERFLOW;
     }
 
-    header = part->elts;
+    // Marshal default and configured headers
+    header_tmp.key.data = key_tmp;
+    header_tmp.value.data = val_tmp;
+    header_tmp.lowcase_key = lowcase_key_tmp;
+    header_tmp.next = NULL;
+
+    ngx_memzero(&e, sizeof(ngx_http_script_engine_t));
+
+    e.ip = headers->values->elts;
+    e.request = r;
+    e.flushed = 1;
+
+    le.ip = headers->lengths->elts;
+
+    while (*(uintptr_t *) le.ip) {
+
+        lcode = *(ngx_http_script_len_code_pt *) le.ip;
+        key_len = lcode(&le);
+
+        for (val_len = 0; *(uintptr_t *) le.ip; val_len += lcode(&le)) {
+            lcode = *(ngx_http_script_len_code_pt *) le.ip;
+        }
+        le.ip += sizeof(uintptr_t);
+
+        if (val_len == 0) {
+            e.skip = 1;
+
+            while (*(uintptr_t *) e.ip) {
+                code = *(ngx_http_script_code_pt *) e.ip;
+                code((ngx_http_script_engine_t *) &e);
+            }
+            e.ip += sizeof(uintptr_t);
+
+            e.skip = 0;
+
+            continue;
+        }
+	// TODO Suppress Authorization type and JVM route request attributes (see below)
+	//  if respective headers were configured with or computed to the empty value?
+
+        e.pos = key_tmp;
+
+        code = *(ngx_http_script_code_pt *) e.ip;
+        code((ngx_http_script_engine_t *) &e);
+
+        e.pos = val_tmp;
+
+        while (*(uintptr_t *) e.ip) {
+            code = *(ngx_http_script_code_pt *) e.ip;
+            code((ngx_http_script_engine_t *) &e);
+        }
+        e.ip += sizeof(uintptr_t);
+
+        header_tmp.key.len = key_len;
+        header_tmp.value.len = val_len;
+        header_tmp.hash = ngx_hash_strlow(header_tmp.lowcase_key, header_tmp.key.data, key_len);
+
+        if ((sc = sc_for_req_header(&header_tmp)) != UNKNOWN_METHOD) {
+            if (ajp_msg_append_uint16(msg, (uint16_t)sc)) {
+                ngx_log_error(NGX_LOG_ERR, log, 0,
+                              "ajp_marshal_into_msgb: "
+                              "Error appending the header name");
+                return AJP_EOVERFLOW;
+            }
+        }
+        else {
+            if (ajp_msg_append_string(msg, &header_tmp.key)) {
+                ngx_log_error(NGX_LOG_ERR, log, 0,
+                              "ajp_marshal_into_msgb: "
+                              "Error appending the header name");
+                return AJP_EOVERFLOW;
+            }
+        }
+
+        /*
+        // Keep configured Connection header as is
+        if (sc == SC_REQ_CONNECTION) {
+            if (alcf->keep_conn) {
+                header_tmp.value.data = (u_char *)"keep-alive";
+                header_tmp.value.len = sizeof("keep-alive") - 1;
+            }
+            else {
+                header_tmp.value.data = (u_char *)"close";
+                header_tmp.value.len = sizeof("close") - 1;
+            }
+        }
+        */
+
+        if (ajp_msg_append_string(msg, &header_tmp.value)) {
+            ngx_log_error(NGX_LOG_ERR, log, 0,
+                          "ajp_marshal_into_msgb: "
+                          "Error appending the header value");
+            return AJP_EOVERFLOW;
+        }
+
+        ngx_log_debug4(NGX_LOG_DEBUG_HTTP, log, 0,
+                       "ajp_marshal_into_msgb: Header[%d] [%V] = [%V], size:%z",
+                       i, &header_tmp.key, &header_tmp.value, ngx_buf_size(msg->buf));
+
+        // Store selected headers value for later lookup
+        if (sc == SC_REQ_AUTHORIZATION) {
+            ngx_memcpy(authorization_val_tmp, header_tmp.value.data, header_tmp.value.len);
+            authorization_str.data = authorization_val_tmp;
+            authorization_str.len = header_tmp.value.len;
+        }
+
+        if (header_tmp.hash == session_route_header_hash) {
+            ngx_memcpy(jvm_route_val_tmp, header_tmp.value.data, header_tmp.value.len);
+            jvm_route_str.data = jvm_route_val_tmp;
+            jvm_route_str.len = header_tmp.value.len;
+        }
+    }
+
+    // Marshal request headers
     if (alcf->upstream.pass_request_headers) {
+        header = part->elts;
 
         for (i = 0; /* void */; i++) {
             if (i >= part->nelts) {
@@ -476,6 +676,11 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
                 part = part->next;
                 header = part->elts;
                 i = 0;
+            }
+
+            if (ngx_hash_find(&headers->hash, header[i].hash,
+                              header[i].lowcase_key, header[i].key.len)) {
+                continue;
             }
 
             if ((sc = sc_for_req_header(&header[i])) != UNKNOWN_METHOD) {
@@ -529,7 +734,13 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
         }
     }
 
-    sc_for_req_auth_type(r, &temp_str);
+    // Consider "Authorization" from configured headers first
+    if (authorization_str.len > 0) {
+        sc_for_auth_type(&authorization_str, &temp_str);
+    }
+    else {
+        sc_for_req_auth_type(r, &temp_str);
+    }
     if (temp_str.len > 0) {
         if (ajp_msg_append_uint8(msg, SC_A_AUTH_TYPE) ||
                 ajp_msg_append_string(msg, &temp_str))
@@ -554,8 +765,13 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
         }
     }
 
-    jvm_route = sc_for_req_get_header_vaule_by_hash(&r->headers_in.headers.part,
-                        (u_char *)"session-route", sizeof("session-route") - 1);
+    // Consider "Session-Route" from configured headers first
+    if (jvm_route_str.len > 0) {
+        jvm_route = &jvm_route_str;
+    }
+    else {
+        jvm_route = sc_for_req_get_header_value_by_hash(&r->headers_in.headers.part, session_route_header_hash);
+    }
     if (jvm_route != NULL) {
         if (ajp_msg_append_uint8(msg, SC_A_JVM_ROUTE) ||
                 ajp_msg_append_string(msg, jvm_route)) {

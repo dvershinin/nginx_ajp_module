@@ -245,7 +245,7 @@ ngx_http_ajp_create_request(ngx_http_request_t *r)
         cl->next = ajp_data_msg_send_body(r,
                 alcf->max_ajp_data_packet_size_conf, &a->body);
 
-        if (a->body) {
+        if (a->body && cl->next) {
             a->state = ngx_http_ajp_st_request_body_data_sending;
         }
         else {
@@ -535,7 +535,7 @@ ngx_http_upstream_send_request_body(ngx_http_request_t *r,
         }
     }
 
-    if (a->body) {
+    if (a->body && cl) {
         a->state = ngx_http_ajp_st_request_body_data_sending;
 
     } else {

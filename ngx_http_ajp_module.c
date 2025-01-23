@@ -33,6 +33,9 @@ static void *ngx_http_ajp_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_ajp_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
+static ngx_int_t ngx_ajp_proxy_init_headers(ngx_conf_t *cf,
+    ngx_http_ajp_loc_conf_t *conf,
+    ngx_ajp_proxy_headers_t *headers, ngx_keyval_t *default_headers);
 
 static ngx_int_t ngx_http_ajp_module_init_process(ngx_cycle_t *cycle);
 
@@ -68,7 +71,47 @@ static ngx_str_t  ngx_http_ajp_hide_headers[] = {
 };
 
 
+// Default headers to always pass to upstream.
+// Currently none.
+
+static ngx_keyval_t  ngx_ajp_proxy_headers[] = {
+/*
+    { ngx_string("Host"), ngx_string("$host") },
+    { ngx_string("Connection"), ngx_string("close") },
+    { ngx_string("Content-Length"), ngx_string("$proxy_internal_body_length") },
+    { ngx_string("Transfer-Encoding"), ngx_string("$proxy_internal_chunked") },
+    { ngx_string("TE"), ngx_string("") },
+    { ngx_string("Keep-Alive"), ngx_string("") },
+    { ngx_string("Expect"), ngx_string("") },
+    { ngx_string("Upgrade"), ngx_string("") },
+*/
+    { ngx_null_string, ngx_null_string }
+};
+
 #if (NGX_HTTP_CACHE)
+
+static ngx_keyval_t  ngx_ajp_proxy_cache_headers[] = {
+/*
+    { ngx_string("Host"), ngx_string("$host") },
+    { ngx_string("Connection"), ngx_string("close") },
+    { ngx_string("Content-Length"), ngx_string("$proxy_internal_body_length") },
+    { ngx_string("Transfer-Encoding"), ngx_string("$proxy_internal_chunked") },
+    { ngx_string("TE"), ngx_string("") },
+    { ngx_string("Keep-Alive"), ngx_string("") },
+    { ngx_string("Expect"), ngx_string("") },
+    { ngx_string("Upgrade"), ngx_string("") },
+    // cache-specific
+    { ngx_string("If-Modified-Since"),
+      ngx_string("$upstream_cache_last_modified") },
+    { ngx_string("If-Unmodified-Since"), ngx_string("") },
+    { ngx_string("If-None-Match"), ngx_string("$upstream_cache_etag") },
+    { ngx_string("If-Match"), ngx_string("") },
+    { ngx_string("Range"), ngx_string("") },
+    { ngx_string("If-Range"), ngx_string("") },
+*/
+    { ngx_null_string, ngx_null_string }
+};
+
 
 static ngx_str_t  ngx_http_ajp_hide_cache_headers[] = {
     ngx_string("Status"),
@@ -360,6 +403,27 @@ static ngx_command_t  ngx_http_ajp_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_ajp_loc_conf_t, keep_conn),
+      NULL },
+
+    { ngx_string("ajp_set_header"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE2,
+      ngx_conf_set_keyval_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ajp_loc_conf_t, headers_source),
+      NULL },
+
+    { ngx_string("ajp_headers_hash_max_size"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ajp_loc_conf_t, headers_hash_max_size),
+      NULL },
+
+    { ngx_string("ajp_headers_hash_bucket_size"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ajp_loc_conf_t, headers_hash_bucket_size),
       NULL },
 
       ngx_null_command
@@ -798,6 +862,10 @@ ngx_http_ajp_create_loc_conf(ngx_conf_t *cf)
 
     conf->keep_conn = NGX_CONF_UNSET;
 
+    conf->headers_source = NGX_CONF_UNSET_PTR;
+    conf->headers_hash_max_size = NGX_CONF_UNSET_UINT;
+    conf->headers_hash_bucket_size = NGX_CONF_UNSET_UINT;
+
     ngx_str_set(&conf->upstream.module, "ajp");
 
     return conf;
@@ -1090,12 +1158,59 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_value(conf->keep_conn, prev->keep_conn, 0);
 
+
     /*if (ngx_http_ajp_merge_params(cf, parent, child) != NGX_OK) {
         return NGX_CONF_ERROR;
     }*/
 
-    hash.max_size = 512;
-    hash.bucket_size = ngx_align(64, ngx_cacheline_size);
+
+    ngx_conf_merge_uint_value(conf->headers_hash_max_size,
+                              prev->headers_hash_max_size, 512);
+
+    ngx_conf_merge_uint_value(conf->headers_hash_bucket_size,
+                              prev->headers_hash_bucket_size, 64);
+
+    conf->headers_hash_bucket_size = ngx_align(conf->headers_hash_bucket_size,
+                                               ngx_cacheline_size);
+
+    ngx_conf_merge_ptr_value(conf->headers_source, prev->headers_source, NULL);
+
+    if (conf->headers_source == prev->headers_source) {
+        conf->headers = prev->headers;
+#if (NGX_HTTP_CACHE)
+        conf->headers_cache = prev->headers_cache;
+#endif
+    }
+
+    if (ngx_ajp_proxy_init_headers(cf, conf, &conf->headers,
+                                   ngx_ajp_proxy_headers) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+#if (NGX_HTTP_CACHE)
+    if (conf->upstream.cache
+        && ngx_ajp_proxy_init_headers(cf, conf, &conf->headers_cache,
+                                      ngx_ajp_proxy_cache_headers) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+#endif
+
+    /*
+     * special handling to preserve conf->headers in the "http" section
+     * to inherit it to all servers
+     */
+
+    if (prev->headers.hash.buckets == NULL
+        && conf->headers_source == prev->headers_source) {
+        prev->headers = conf->headers;
+#if (NGX_HTTP_CACHE)
+        prev->headers_cache = conf->headers_cache;
+#endif
+    }
+
+
+    hash.max_size = conf->headers_hash_max_size;
+    hash.bucket_size = ngx_align(conf->headers_hash_bucket_size, ngx_cacheline_size);
     hash.name = "ajp_hide_headers_hash";
 
 #if (NGX_HTTP_CACHE)
@@ -1151,6 +1266,169 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 //=======
 //>>>>>>> upstream/master
     return NGX_CONF_OK;
+}
+
+
+static ngx_int_t
+ngx_ajp_proxy_init_headers(ngx_conf_t *cf, ngx_http_ajp_loc_conf_t *conf,
+    ngx_ajp_proxy_headers_t *headers, ngx_keyval_t *default_headers)
+{
+    u_char                       *p;
+    size_t                        size;
+    uintptr_t                    *code;
+    ngx_uint_t                    i;
+    ngx_array_t                   headers_names, headers_merged;
+    ngx_keyval_t                 *src, *s, *h;
+    ngx_hash_key_t               *hk;
+    ngx_hash_init_t               hash;
+    ngx_http_script_compile_t     sc;
+    ngx_http_script_copy_code_t  *copy;
+
+    if (headers->hash.buckets) {
+        return NGX_OK;
+    }
+
+    if (ngx_array_init(&headers_names, cf->temp_pool, 4, sizeof(ngx_hash_key_t))
+        != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+    if (ngx_array_init(&headers_merged, cf->temp_pool, 4, sizeof(ngx_keyval_t))
+        != NGX_OK) {
+        return NGX_ERROR;
+    }
+
+    headers->lengths = ngx_array_create(cf->pool, 64, 1);
+    if (headers->lengths == NULL) {
+        return NGX_ERROR;
+    }
+
+    headers->values = ngx_array_create(cf->pool, 512, 1);
+    if (headers->values == NULL) {
+        return NGX_ERROR;
+    }
+
+    if (conf->headers_source) {
+
+        src = conf->headers_source->elts;
+        for (i = 0; i < conf->headers_source->nelts; i++) {
+
+            s = ngx_array_push(&headers_merged);
+            if (s == NULL) {
+                return NGX_ERROR;
+            }
+
+            *s = src[i];
+        }
+    }
+
+    h = default_headers;
+
+    while (h->key.len) {
+
+        src = headers_merged.elts;
+        for (i = 0; i < headers_merged.nelts; i++) {
+            if (ngx_strcasecmp(h->key.data, src[i].key.data) == 0) {
+                goto next;
+            }
+        }
+
+        s = ngx_array_push(&headers_merged);
+        if (s == NULL) {
+            return NGX_ERROR;
+        }
+
+        *s = *h;
+
+    next:
+
+        h++;
+    }
+
+    src = headers_merged.elts;
+    for (i = 0; i < headers_merged.nelts; i++) {
+
+        hk = ngx_array_push(&headers_names);
+        if (hk == NULL) {
+            return NGX_ERROR;
+        }
+
+        hk->key = src[i].key;
+        hk->key_hash = ngx_hash_key_lc(src[i].key.data, src[i].key.len);
+        hk->value = (void *) 1;
+
+        if (src[i].value.len == 0) {
+            continue;
+        }
+
+        copy = ngx_array_push_n(headers->lengths,
+                                sizeof(ngx_http_script_copy_code_t));
+        if (copy == NULL) {
+            return NGX_ERROR;
+        }
+
+        copy->code = (ngx_http_script_code_pt) (void *)
+                                                 ngx_http_script_copy_len_code;
+        copy->len = src[i].key.len;
+
+        size = (sizeof(ngx_http_script_copy_code_t)
+                + src[i].key.len + sizeof(uintptr_t) - 1)
+               & ~(sizeof(uintptr_t) - 1);
+
+        copy = ngx_array_push_n(headers->values, size);
+        if (copy == NULL) {
+            return NGX_ERROR;
+        }
+
+        copy->code = ngx_http_script_copy_code;
+        copy->len = src[i].key.len;
+
+        p = (u_char *) copy + sizeof(ngx_http_script_copy_code_t);
+        ngx_memcpy(p, src[i].key.data, src[i].key.len);
+
+        ngx_memzero(&sc, sizeof(ngx_http_script_compile_t));
+
+        sc.cf = cf;
+        sc.source = &src[i].value;
+        sc.flushes = &headers->flushes;
+        sc.lengths = &headers->lengths;
+        sc.values = &headers->values;
+
+        if (ngx_http_script_compile(&sc) != NGX_OK) {
+            return NGX_ERROR;
+        }
+
+        code = ngx_array_push_n(headers->lengths, sizeof(uintptr_t));
+        if (code == NULL) {
+            return NGX_ERROR;
+        }
+
+        *code = (uintptr_t) NULL;
+
+        code = ngx_array_push_n(headers->values, sizeof(uintptr_t));
+        if (code == NULL) {
+            return NGX_ERROR;
+        }
+
+        *code = (uintptr_t) NULL;
+    }
+
+    code = ngx_array_push_n(headers->lengths, sizeof(uintptr_t));
+    if (code == NULL) {
+        return NGX_ERROR;
+    }
+
+    *code = (uintptr_t) NULL;
+
+    hash.hash = &headers->hash;
+    hash.key = ngx_hash_key_lc;
+    hash.max_size = conf->headers_hash_max_size;
+    hash.bucket_size = conf->headers_hash_bucket_size;
+    hash.name = "ajp_proxy_headers_hash";
+    hash.pool = cf->pool;
+    hash.temp_pool = NULL;
+
+    return ngx_hash_init(&hash, headers_names.elts, headers_names.nelts);
 }
 
 
