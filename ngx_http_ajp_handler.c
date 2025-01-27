@@ -245,7 +245,7 @@ ngx_http_ajp_create_request(ngx_http_request_t *r)
         cl->next = ajp_data_msg_send_body(r,
                 alcf->max_ajp_data_packet_size_conf, &a->body);
 
-        if (a->body && cl->next) {
+        if (a->body) {
             a->state = ngx_http_ajp_st_request_body_data_sending;
         }
         else {
@@ -500,7 +500,7 @@ ngx_http_upstream_send_request_body(ngx_http_request_t *r,
     a = ngx_http_get_module_ctx(r, ngx_http_ajp_module);
     alcf = ngx_http_get_module_loc_conf(r, ngx_http_ajp_module);
 
-    if (a->state > ngx_http_ajp_st_request_body_data_sending) {
+    if (a->state > ngx_http_ajp_st_request_send_all_done) {
         ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
                       "ngx_http_upstream_send_request_body: bad state(%d)",
                       a->state);
@@ -535,7 +535,7 @@ ngx_http_upstream_send_request_body(ngx_http_request_t *r,
         }
     }
 
-    if (a->body && cl) {
+    if (a->body) {
         a->state = ngx_http_ajp_st_request_body_data_sending;
 
     } else {
