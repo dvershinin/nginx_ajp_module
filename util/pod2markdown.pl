@@ -22,6 +22,7 @@ use strict;
 use warnings;
 use Pod::Parser; 
 use Pod::Markdown;
+use open qw( :std :encoding(UTF-8) );
 
 my $parser = Pod::Markdown->new;
 

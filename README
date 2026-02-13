@@ -205,6 +205,26 @@ Directives
 
     Set the buffer size of Forward Request packet. The range is (0, 2^16).
 
+  ajp_headers_hash_bucket_size
+    syntax: *ajp_headers_hash_bucket_size size;*
+
+    default: *ajp_headers_hash_bucket_size 64;*
+
+    context: *http, server, location*
+
+    Sets the bucket size for hash tables used by the ajp_hide_header and
+    ajp_set_header directives.
+
+  ajp_headers_hash_max_size
+    syntax: *ajp_headers_hash_max_size size;*
+
+    default: *ajp_headers_hash_max_size 512;*
+
+    context: *http, server, location*
+
+    Sets the maximum size of hash tables used by the ajp_hide_header and
+    ajp_set_header directives.
+
   ajp_hide_header
     syntax: *ajp_hide_header name;*
 
@@ -294,6 +314,7 @@ Directives
     transferred to the client -- that is, if an error or timeout arises in
     the middle of the transfer of the request, then it is not possible to
     retry the current request on a different server.
+
   ajp_max_data_packet_size
     syntax: *ajp_max_data_packet_size size;*
 
@@ -403,6 +424,19 @@ Directives
     upstream server will not take new data, then nginx is shutdown the
     connection.
 
+  ajp_set_header
+    syntax: *ajp_set_header name value;*
+
+    context: *http, server, location*
+
+    Allows redefining or appending fields to the request header passed to
+    the AJP server. The value can contain text, variables, and their
+    combinations.
+
+    These directives are inherited from the previous configuration level if
+    and only if there are no ajp_set_header directives defined on the
+    current level.
+
   ajp_store
     syntax: *ajp_store [on | off | path] ;*
 
@@ -502,8 +536,10 @@ Compatibility
     The master branch is for Nginx-1.1.4+
     If you want to use it with Nginx-1.0.x, you can use this nginx-1.0
     (<https://github.com/yaoweibin/nginx_ajp_module/tree/nginx-1.0>) branch.
+
 TODO
     SSL
+
 Known Issues
     *
 
@@ -514,15 +550,18 @@ Changelogs
     bugfix
   v0.1
     first release
+
 Authors
     Weibin Yao(姚伟斌) *yaoweibin AT gmail DOT com*
     Jinti Shen(路奇) *jinti.shen AT gmail DOT com*
     Joshua Zhu(叔度) *zhuzhaoyuan AT gmail DOT com*
     Simon Liu(雕梁) *simohayha.bobo AT gmail DOT com*
     Matthew Ma(东坡) *mj19821214 AT gmail DOT com*
+
 Acknowledgments
     Thanks 李金虎(beagem@163.com) to improve the keepalive feature with
     this module.
+
 License
     This README template is from agentzh (<http://github.com/agentzh>).
 
@@ -543,6 +582,7 @@ License
     Redistributions in binary form must reproduce the above copyright
     notice, this list of conditions and the following disclaimer in the
     documentation and/or other materials provided with the distribution.
+
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
     IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
     TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A

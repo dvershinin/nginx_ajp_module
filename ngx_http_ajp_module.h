@@ -14,6 +14,13 @@ typedef struct {
 #endif
 
 typedef struct {
+    ngx_array_t                   *flushes;
+    ngx_array_t                   *lengths;
+    ngx_array_t                   *values;
+    ngx_hash_t                     hash;
+} ngx_ajp_proxy_headers_t;
+
+typedef struct {
     ngx_http_upstream_conf_t   upstream;
 
     size_t                     ajp_header_packet_buffer_size_conf;
@@ -31,6 +38,14 @@ typedef struct {
 #endif
 
     ngx_str_t		       secret;
+
+    ngx_ajp_proxy_headers_t        headers;
+#if (NGX_HTTP_CACHE)
+    ngx_ajp_proxy_headers_t        headers_cache;
+#endif
+    ngx_array_t                   *headers_source;
+    ngx_uint_t                     headers_hash_max_size;
+    ngx_uint_t                     headers_hash_bucket_size;
 
 } ngx_http_ajp_loc_conf_t;
 

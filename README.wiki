@@ -195,7 +195,7 @@ Parameters of caching can also be set directly in the response header. This has 
 
 This directive assigns a timeout for the connection to the upstream server. It is necessary to keep in mind that this time out cannot be more than 75 seconds.
 
-This is not the time until the server returns the pages, this is the [[#ajp_read_timeout| ajp_read_timeout]]  statement. If your upstream server is up, but hanging (e.g. it does not have enough threads to process your request so it puts you in the pool of connections to deal with later), then this statement will not help as the connection to the server has been made.
+This is not the time until the server returns the pages, this is the [[#ajp_read_timeout|ajp_read_timeout]] statement. If your upstream server is up, but hanging (e.g. it does not have enough threads to process your request so it puts you in the pool of connections to deal with later), then this statement will not help as the connection to the server has been made.
 
 == ajp_header_packet_buffer_size ==
 
@@ -206,6 +206,26 @@ This is not the time until the server returns the pages, this is the [[#ajp_read
 '''context:''' ''http, server, location''
 
 Set the buffer size of Forward Request packet. The range is (0, 2^16).
+
+== ajp_headers_hash_bucket_size ==
+
+'''syntax:''' ''ajp_headers_hash_bucket_size size;''
+
+'''default:''' ''ajp_headers_hash_bucket_size 64;''
+
+'''context:''' ''http, server, location''
+
+Sets the bucket size for hash tables used by the ajp_hide_header and ajp_set_header directives.
+
+== ajp_headers_hash_max_size ==
+
+'''syntax:''' ''ajp_headers_hash_max_size size;''
+
+'''default:''' ''ajp_headers_hash_max_size 512;''
+
+'''context:''' ''http, server, location''
+
+Sets the maximum size of hash tables used by the ajp_hide_header and ajp_set_header directives.
 
 == ajp_hide_header ==
 
@@ -396,6 +416,16 @@ This directive set SO_SNDLOWAT. This directive is only available on FreeBSD
 '''context:''' ''http, server, location''
 
 This directive assigns timeout with the transfer of request to the upstream server. Timeout is established not on entire transfer of request, but only between two write operations. If after this time the upstream server will not take new data, then nginx is shutdown the connection.
+
+== ajp_set_header ==
+
+'''syntax:''' ''ajp_set_header name value;''
+
+'''context:''' ''http, server, location''
+
+Allows redefining or appending fields to the request header passed to the AJP server. The value can contain text, variables, and their combinations.
+
+These directives are inherited from the previous configuration level if and only if there are no ajp_set_header directives defined on the current level.
 
 == ajp_store ==
 

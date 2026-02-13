@@ -178,6 +178,26 @@ __context:__ _http, server, location_
 
 Set the buffer size of Forward Request packet. The range is (0, 2^16).
 
+## ajp\_headers\_hash\_bucket\_size
+
+__syntax:__ _ajp\_headers\_hash\_bucket\_size size;_
+
+__default:__ _ajp\_headers\_hash\_bucket\_size 64;_
+
+__context:__ _http, server, location_
+
+Sets the bucket size for hash tables used by the ajp\_hide\_header and ajp\_set\_header directives.
+
+## ajp\_headers\_hash\_max\_size
+
+__syntax:__ _ajp\_headers\_hash\_max\_size size;_
+
+__default:__ _ajp\_headers\_hash\_max\_size 512;_
+
+__context:__ _http, server, location_
+
+Sets the maximum size of hash tables used by the ajp\_hide\_header and ajp\_set\_header directives.
+
 ## ajp\_hide\_header
 
 __syntax:__ _ajp\_hide\_header name;_
@@ -364,6 +384,16 @@ __context:__ _http, server, location_
 
 This directive assigns timeout with the transfer of request to the upstream server. Timeout is established not on entire transfer of request, but only between two write operations. If after this time the upstream server will not take new data, then nginx is shutdown the connection.
 
+## ajp\_set\_header
+
+__syntax:__ _ajp\_set\_header name value;_
+
+__context:__ _http, server, location_
+
+Allows redefining or appending fields to the request header passed to the AJP server. The value can contain text, variables, and their combinations.
+
+These directives are inherited from the previous configuration level if and only if there are no ajp\_set\_header directives defined on the current level.
+
 ## ajp\_store
 
 __syntax:__ _ajp\_store \[on | off | path\] ;_
@@ -500,11 +530,3 @@ Redistribution and use in source and binary forms, with or without modification,
 - Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-# POD ERRORS
-
-Hey! __The above document had some coding errors, which are explained below:__
-
-- Around line 212:
-
-    L<> starts or ends with whitespace

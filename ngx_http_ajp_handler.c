@@ -500,7 +500,7 @@ ngx_http_upstream_send_request_body(ngx_http_request_t *r,
     a = ngx_http_get_module_ctx(r, ngx_http_ajp_module);
     alcf = ngx_http_get_module_loc_conf(r, ngx_http_ajp_module);
 
-    if (a->state > ngx_http_ajp_st_request_body_data_sending) {
+    if (a->state > ngx_http_ajp_st_request_send_all_done) {
         ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
                       "ngx_http_upstream_send_request_body: bad state(%d)",
                       a->state);
