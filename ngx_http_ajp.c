@@ -433,7 +433,7 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
     ngx_str_t            uri, *remote_host, *remote_addr;
     ngx_str_t            temp_str, *jvm_route, port_str, param_str, val_str;
     ngx_log_t           *log;
-    ngx_uint_t           i, num_headers = 0;
+    ngx_uint_t           i = 0, num_headers = 0;
     ngx_list_part_t     *part;
     ngx_table_elt_t     *header;
     struct sockaddr_in  *addr;
