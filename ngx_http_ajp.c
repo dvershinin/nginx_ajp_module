@@ -886,7 +886,6 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
         }
 
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
-//<<<<<<< HEAD
                 "ajp_marshal_into_msgb: attribute %V %V", &temp_str, &port_str);
 
         if (alcf->script_url.len > 0) {
@@ -907,10 +906,6 @@ ajp_marshal_into_msgb(ajp_msg_t *msg,
                     return AJP_EOVERFLOW;
             }
         }
-/*=======
-                       "ajp_marshal_into_msgb: attribute %V %V",
-                       &temp_str, &port_str);
->>>>>>> upstream/master*/
     }
 
     if (ajp_msg_append_uint8(msg, SC_A_ARE_DONE)) {

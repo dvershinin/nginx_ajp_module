@@ -878,16 +878,11 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_ajp_loc_conf_t *prev = parent;
     ngx_http_ajp_loc_conf_t *conf = child;
 
-//<<<<<<< HEAD
     size_t                        size;
     ngx_str_t                    *h;
     ngx_hash_init_t               hash;
     ngx_http_script_compile_t     sc;
     ngx_uint_t n;
-//=======
-//    size_t            size;
-//    ngx_str_t        *h;
-//    ngx_hash_init_t   hash;
 
     if (conf->secret.data == NULL){
       conf->secret = prev->secret;
@@ -904,7 +899,6 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
 #endif
-//>>>>>>> upstream/master
 
     if (conf->upstream.store != 0) {
         ngx_conf_merge_value(conf->upstream.store,
@@ -1239,7 +1233,6 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->ajp_values = prev->ajp_values;
     }
 
-//<<<<<<< HEAD
     if (conf->param_lengths == NULL) {
         conf->param_lengths = prev->param_lengths;
         conf->param_values = prev->param_values;
@@ -1263,8 +1256,6 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
-//=======
-//>>>>>>> upstream/master
     return NGX_CONF_OK;
 }
 
