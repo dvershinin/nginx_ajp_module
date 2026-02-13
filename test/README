@@ -272,4 +272,3 @@ COPYRIGHT & LICENSE
 
 SEE ALSO
     Test::Nginx::LWP, Test::Nginx::Socket, Test::Base.
-

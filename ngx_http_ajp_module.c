@@ -781,7 +781,7 @@ ngx_http_ajp_create_main_conf(ngx_conf_t *cf)
     if (ngx_array_init(&conf->caches, cf->pool, 4,
                        sizeof(ngx_http_file_cache_t *))
         != NGX_OK)
-    {  
+    {
         return NULL;
     }
 #endif
@@ -1139,7 +1139,7 @@ ngx_http_ajp_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_value(conf->upstream.cache_lock,
                          prev->upstream.cache_lock, 0);
-    
+
     ngx_conf_merge_str_value(conf->script_url,
                          prev->script_url, "");
 
@@ -1436,7 +1436,7 @@ ngx_ajp_proxy_init_headers(ngx_conf_t *cf, ngx_http_ajp_loc_conf_t *conf,
 /*
 static ngx_int_t
 ngx_http_ajp_merge_params(ngx_conf_t *cf, void *parent, void *child) {
-    
+
     if (child->params_source == NULL) {
         child->params_source = parent->params_source;
 	child->params = parent->params;
@@ -1444,7 +1444,7 @@ ngx_http_ajp_merge_params(ngx_conf_t *cf, void *parent, void *child) {
 	return NGX_OK;
     }
 
-    
+
 
     return NGX_OK;
 }

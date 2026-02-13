@@ -128,4 +128,3 @@ sub collapse_lists {
     undef $last_bl_count_level;
     undef @bl_counts;
 }
-

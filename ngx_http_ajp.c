@@ -1008,7 +1008,7 @@ ajp_unmarshal_response(ajp_msg_t *msg,
     }
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, log, 0,
-                   "ajp_unmarshal_response: status_line = \"%V\"", 
+                   "ajp_unmarshal_response: status_line = \"%V\"",
                    &u->headers_in.status_line);
 
     if (u->state) {
