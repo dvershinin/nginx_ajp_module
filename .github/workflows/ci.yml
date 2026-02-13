@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nginx:
+          - stable
+          - mainline
+
+    steps:
+      - name: Checkout module
+        uses: actions/checkout@v4
+        with:
+          path: nginx_ajp_module
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre3-dev zlib1g-dev
+
+      - name: Determine NGINX version
+        id: nginx_version
+        run: |
+          if [ "${{ matrix.nginx }}" = "stable" ]; then
+            VERSION=$(curl -s https://nginx.org/en/download.html | grep -oP 'nginx-\K[0-9]+\.[0-9]+\.[0-9]+' | grep -E '^[0-9]+\.[0-9]*[02468]\.' | head -1)
+          else
+            VERSION=$(curl -s https://nginx.org/en/download.html | grep -oP 'nginx-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using NGINX version: $VERSION"
+
+      - name: Download NGINX
+        run: |
+          wget -q https://nginx.org/download/nginx-${{ steps.nginx_version.outputs.version }}.tar.gz
+          tar -xzf nginx-${{ steps.nginx_version.outputs.version }}.tar.gz
+
+      - name: Build static module
+        run: |
+          cd nginx-${{ steps.nginx_version.outputs.version }}
+          ./configure --add-module=../nginx_ajp_module
+          make -j$(nproc)
+
+      - name: Build dynamic module
+        run: |
+          cd nginx-${{ steps.nginx_version.outputs.version }}
+          make clean
+          ./configure --with-compat --add-dynamic-module=../nginx_ajp_module
+          make modules -j$(nproc)
+
+      - name: Verify dynamic module
+        run: |
+          ls -la nginx-${{ steps.nginx_version.outputs.version }}/objs/ngx_http_ajp_module.so

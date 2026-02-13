@@ -1,0 +1,45 @@
+name: Trigger Package Builds
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  trigger-rpm-build:
+    name: Trigger RPM Package Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger yml2spec-nginx-module pipeline
+        run: |
+          curl -X POST "https://circleci.com/api/v2/project/bb/danila_vershinin/yml2spec-nginx-module/pipeline" \
+            -H "Circle-Token: ${{ secrets.CIRCLECI_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "branch": "master",
+              "parameters": {
+                "run_matrix": false,
+                "module_path": "modules/ajp.yml"
+              }
+            }'
+        env:
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
+
+  trigger-deb-build:
+    name: Trigger DEB Package Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger yml2deb-nginx-module pipeline
+        run: |
+          curl -X POST "https://circleci.com/api/v2/project/bb/danila_vershinin/yml2deb-nginx-module/pipeline" \
+            -H "Circle-Token: ${{ secrets.CIRCLECI_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "branch": "main",
+              "parameters": {
+                "run_matrix": false,
+                "module_path": "modules/ajp.yml"
+              }
+            }'
+        env:
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
