@@ -54,6 +54,16 @@ In this part of response the small response-header is located, as a rule.
 
 By default, the buffersize is equal to the size of one buffer in directive <code>ajp_buffers</code>; however, it is possible to set it to less.
 
+== ajp_busy_buffers_size ==
+
+'''syntax:''' ''ajp_busy_buffers_size size;''
+
+'''default:''' ''ajp_busy_buffers_size 8k/16k;''
+
+'''context:''' ''http, server, location''
+
+When buffering of responses from the AJP server is enabled, limits the total size of buffers that can be busy sending a response to the client while the response is not yet fully read. In the meantime, the rest of the buffers can be used for reading the response and, if needed, buffering part of the response to a temporary file. By default, size is limited by the size of two buffers set by the <code>ajp_buffer_size</code> and <code>ajp_buffers</code> directives.
+
 == ajp_cache ==
 
 '''syntax:''' ''ajp_cache zone;''
@@ -85,6 +95,26 @@ Note that by default, the hostname of the server is not included in the cache ke
 <geshi lang="nginx">
 	ajp_cache_key "$scheme$host$request_uri";
 </geshi>
+
+== ajp_cache_lock ==
+
+'''syntax:''' ''ajp_cache_lock on | off;''
+
+'''default:''' ''ajp_cache_lock off;''
+
+'''context:''' ''http, server, location''
+
+When enabled, only one request at a time will be allowed to populate a new cache element identified according to the <code>ajp_cache_key</code> directive by passing a request to an AJP server. Other requests of the same cache element will either wait for a response to appear in the cache or the cache lock for this element to be released, up to the time set by the <code>ajp_cache_lock_timeout</code> directive.
+
+== ajp_cache_lock_timeout ==
+
+'''syntax:''' ''ajp_cache_lock_timeout time;''
+
+'''default:''' ''ajp_cache_lock_timeout 5s;''
+
+'''context:''' ''http, server, location''
+
+Sets a timeout for <code>ajp_cache_lock</code>. When the time expires, the request will be passed to the AJP server, however, the response will not be cached.
 
 == ajp_cache_methods ==
 
@@ -397,6 +427,33 @@ Permits to pass request body from the client to server.
 
 Directive sets the amount of time for upstream to wait for a AJP process to send data.  Change this directive if you have long running AJP processes that do not produce output until they have finished processing.  If you are seeing an upstream timed out error in the error log, then increase this parameter to something more appropriate.
 
+== ajp_script_url ==
+
+'''syntax:''' ''ajp_script_url url;''
+
+'''default:''' ''none''
+
+'''context:''' ''http, server, location''
+
+Sets a custom script URL to be used as part of the cache key when caching is enabled. This allows customization of how cached responses are identified.
+
+== ajp_secret ==
+
+'''syntax:''' ''ajp_secret secret;''
+
+'''default:''' ''none''
+
+'''context:''' ''location, if in location''
+
+Sets the AJP secret for authentication with the backend AJP server. This corresponds to the <code>secret</code> attribute in Tomcat's AJP connector configuration. When set, the secret is sent as part of the AJP handshake to authenticate the connection with the backend server.
+
+<geshi lang="nginx">
+	location / {
+		ajp_pass tomcat_backend;
+		ajp_secret "your_secret_here";
+	}
+</geshi>
+
 == ajp_send_lowat ==
 
 '''syntax:''' ''ajp_send_lowat [ on | off ];''
@@ -503,6 +560,22 @@ This directive works like [[NginxHttpCoreModule#client_body_temp_path|client_bod
 '''context:''' ''http, server, location, if''
 
 Sets the amount of data that will be flushed to the ajp_temp_path when writing. It may be used to prevent a worker process blocking for too long while spooling data.
+
+== ajp_upstream_fail_timeout ==
+
+'''syntax:''' ''ajp_upstream_fail_timeout time;''
+
+'''context:''' ''http, server, location''
+
+This directive is '''deprecated'''. Use the <code>fail_timeout</code> parameter of the <code>server</code> directive in the <code>upstream</code> block instead.
+
+== ajp_upstream_max_fails ==
+
+'''syntax:''' ''ajp_upstream_max_fails number;''
+
+'''context:''' ''http, server, location''
+
+This directive is '''deprecated'''. Use the <code>max_fails</code> parameter of the <code>server</code> directive in the <code>upstream</code> block instead.
 
 = Installation =
 
